@@ -1,0 +1,420 @@
+echo "Building shared ffmpeg executable with vaapi, fdkaac, zimg ..."
+PROC=$(nproc)
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib:/lib:/usr/lib
+
+apt-get update
+
+echo "Installing build tools..."
+apt-get -y install \
+  autoconf \
+  automake \
+  build-essential \
+  cmake \
+  m4 \
+  git \
+  git-core \
+  meson \
+  dpkg-dev \
+  ninja-build \
+  p11-kit \
+  libc-dev \
+  libzstd-dev \
+  libc6-dev \
+  gcc-multilib \
+  pkg-config \
+  texinfo \
+  curl \
+  wget \
+  nasm \
+  yasm \
+  bison \
+  swig \
+  zlib1g-dev \
+  python2.7-dev \
+  python3-dev \
+  python3-pip \
+  cython3 \
+  subversion
+
+echo "Installing rustc (only needed for rav1e)"
+apt -y purge ffmpeg rustc cargo && apt-get -y autoremove && \
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh && \
+source $HOME/.cargo/env
+
+echo "Installing core libraries..."
+apt-get -y install libass-dev libfreetype6-dev libgnutls28-dev libmp3lame-dev libsdl2-dev libtool libva-dev libvdpau-dev libvorbis-dev libxcb1-dev libxcb-shm0-dev libxcb-xfixes0-dev libunistring-dev libx264-dev libx265-dev libnuma-dev libvpx-dev libfdk-aac-dev libopus-dev libspeex-dev libsndio-dev libopencore-amrnb-dev libopencore-amrwb-dev libtheora-dev librtmp-dev openssl libssl-dev
+
+echo "Installing additional libraries..."
+apt-get -y install libass-dev libfreetype6-dev libmp3lame-dev libsdl2-dev libtool libva-dev libvdpau-dev libvorbis-dev libxcb1-dev libxcb-shm0-dev libxcb-xfixes0-dev libaom-dev libmysofa-dev libfdk-aac-dev liblzma-dev libbluray-dev libchromaprint-dev frei0r-plugins-dev ladspa-sdk libcaca-dev libcdio-paranoia-dev libcodec2-dev libfontconfig1-dev libfribidi-dev libgme-dev libgsm1-dev libjack-dev libmodplug-dev libopencore-amrnb-dev libopencore-amrwb-dev libopenjp2-7-dev libopenmpt-dev libopus-dev librsvg2-dev librubberband-dev librtmp-dev rtmpdump libshine-dev libsmbclient-dev libsnappy-dev libsoxr-dev libspeex-dev libssh-dev libtesseract-dev libtheora-dev libtwolame-dev libv4l-dev libvo-amrwbenc-dev libvpx-dev libwavpack-dev libwebp-dev libx264-dev libx265-dev libnuma-dev libxvidcore-dev libxml2-dev libzmq3-dev libzvbi-dev liblilv-dev libopenal-dev opencl-dev opencl-clhpp-headers libjack-dev libmagic-dev libunistring-dev libssl-dev libsrt-dev libjpeg-dev libgif-dev  libtiff-dev libvidstab-dev libasound2-dev libvma-dev libaribb24-dev lv2-dev liblilv-0-0 liblilv-dev libiec61883-dev libraw1394-tools libraw1394-doc libraw1394-dev libraw1394-doc libraw1394-tools libavc1394-0 libavc1394-dev libavc1394-tools libavcodec-dev libavformat-dev libavutil-dev libbs2b-dev libbs2b0 libdc1394-22-dev libomxil-bellagio-dev libtdb-dev libsndfile-dev libspeexdsp-dev libcap-dev flite1-dev glslang-dev libvulkan-dev libmfx-dev libpng-dev liblensfun-dev librabbitmq-dev libpciaccess-dev
+
+mkdir -p ~/ffmpeg_sources ~/ffmpeg_build ~/bin
+
+--extra-ldexeflags="-static" \
+
+echo "Compiling FFmpeg..."
+apt -y purge ffmpeg && apt-get -y autoremove && \
+cd ~/ffmpeg_sources && \
+rm -rf ffmpeg && \
+wget -O ffmpeg-snapshot.tar.bz2 https://ffmpeg.org/releases/ffmpeg-snapshot.tar.bz2 && \
+tar -xjvf ffmpeg-snapshot.tar.bz2 && \
+cd ffmpeg && \
+PATH="$HOME/bin:$PATH" PKG_CONFIG_PATH="$HOME/ffmpeg_build/lib/pkgconfig:/usr/local/lib/pkgconfig:/usr/local/share/pkgconfig" ./configure \
+--bindir="$HOME/bin" \
+--prefix="$HOME/ffmpeg_build" \
+--extra-ldflags="-L$HOME/ffmpeg_build/lib -no-pie" \
+--extra-cflags="-I$HOME/ffmpeg_build/include -I/usr/include/samba-4.0 -no-pie" \
+--extra-libs="-lpthread -lm -lpng -lz" \
+--extra-version=washcroft-$(date +%F) \
+--pkg-config-flags="--static" \
+--ld="g++" \
+--disable-doc \
+--enable-pthreads \
+--enable-gpl \
+--enable-version3 \
+--enable-nonfree \
+--enable-gray \
+--enable-openssl \
+--enable-libaom \
+--enable-libass \
+--enable-libfdk-aac \
+--enable-libfreetype \
+--enable-libmp3lame \
+--enable-libopus \
+--enable-libsvtav1 \
+--enable-libdav1d \
+--enable-libvorbis \
+--enable-libvpx \
+--enable-libx264 \
+--enable-libx265 \
+--enable-libtheora \
+--enable-libopencore_amrwb \
+--enable-libopencore_amrnb \
+--enable-libspeex \
+--enable-libvmaf \
+--enable-fontconfig \
+--enable-libfreetype \
+--enable-librtmp \
+--enable-librtmp \
+--enable-libzimg && \
+PATH="$HOME/bin:$PATH" make -j$PROC && \
+make install && \
+hash -r
+
+source ~/.profile
+
+----
+
+echo "Patching libsmbclient" #https://github.com/samba-team/samba/commit/1114b02a72ce0c86a5301816560d270ec47f8be3
+grep -q -e "#include <time.h>" /usr/include/samba-4.0/libsmbclient.h || sed -i "/#include <utime.h>/i#include <time.h>" /usr/include/samba-4.0/libsmbclient.h
+
+echo "Installing Vulkan SDK"
+wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add - && \
+wget -qO /etc/apt/sources.list.d/lunarg-vulkan-1.2.189-focal.list https://packages.lunarg.com/vulkan/1.2.189/lunarg-vulkan-1.2.189-focal.list && \
+apt update && \
+apt -y install vulkan-sdk
+
+----
+
+echo "Compiling zimg..."
+cd ~/ffmpeg_sources && \
+git -C zimg pull 2> /dev/null || git clone https://github.com/sekrit-twc/zimg.git && \
+cd zimg && \
+PATH="$HOME/bin:$PATH" ./autogen.sh --prefix="$HOME/ffmpeg_build" --enable-static --disable-shared  && \
+PATH="$HOME/bin:$PATH" ./configure --prefix="$HOME/ffmpeg_build" --enable-static --disable-shared && \
+PATH="$HOME/bin:$PATH" make -j$PROC && \
+make install && \
+rm -v /usr/local/lib/libzimg.so* && \
+rm -v $HOME/ffmpeg_build/lib/libzimg.so*
+
+echo "Compiling AviSynthPlus..."
+cd ~/ffmpeg_sources && \
+git -C AviSynthPlus pull 2> /dev/null || git clone https://github.com/pinterf/AviSynthPlus.git && \
+cd AviSynthPlus && \
+make install PREFIX="$HOME/ffmpeg_build"
+
+echo "Compiling AOM..."
+apt -y purge libaom0 libaom-dev && apt-get -y autoremove && \
+cd ~/ffmpeg_sources && \
+mkdir -p aom && cd aom && \
+git -C aom pull 2> /dev/null || git clone https://aomedia.googlesource.com/aom && \
+PATH="$HOME/bin:$PATH" cmake aom/ -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DCMAKE_BUILD_TYPE=Release -DENABLE_SHARED=OFF -DBUILD_SHARED_LIBS=OFF -DENABLE_STATIC=ON -DENABLE_EXAMPLES=OFF -DENABLE_DOCS=OFF -DENABLE_TESTS=OFF -DBUILD_TOOLS=OFF && \
+PATH="$HOME/bin:$PATH" make -j$PROC && \
+make install
+
+echo "Compiling dav1d..."
+apt -y purge dav1d dav1d-dev && apt-get -y autoremove && \
+cd ~/ffmpeg_sources && \
+git -C dav1d pull 2> /dev/null || git clone https://code.videolan.org/videolan/dav1d.git && \
+mkdir -p dav1d/build && cd dav1d/build && \
+/usr/local/bin/meson setup -Denable_tests=false -Denable_tools=false --default-library=static --buildtype=release .. --prefix "$HOME/ffmpeg_build" --libdir="$HOME/ffmpeg_build/lib" --bindir="$HOME/ffmpeg_build/bin" && \
+ninja && \
+ninja install
+
+echo "Compiling SVT-AV1..."
+cd ~/ffmpeg_sources && \
+mkdir -p SVT-AV1 && cd SVT-AV1 && \
+git -C SVT-AV1 pull 2> /dev/null || git clone https://github.com/OpenVisualCloud/SVT-AV1 && \
+PATH="$HOME/bin:$PATH" cmake SVT-AV1/ -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DCMAKE_BUILD_TYPE=Release -DENABLE_SHARED=OFF -DBUILD_SHARED_LIBS=OFF -DENABLE_STATIC=ON -DENABLE_EXAMPLES=OFF -DENABLE_DOCS=OFF -DENABLE_TESTS=OFF -DBUILD_TOOLS=OFF && \
+PATH="$HOME/bin:$PATH" make -j$PROC && \
+make install
+
+echo "Compiling VMAF..."
+cd ~/ffmpeg_sources && \
+wget -O v2.1.1.tar.gz https://github.com/Netflix/vmaf/archive/v2.1.1.tar.gz && \
+tar -xvf v2.1.1.tar.gz && \
+mkdir -p vmaf-2.1.1/libvmaf/build && cd vmaf-2.1.1/libvmaf/build && \
+meson setup -Denable_tests=false -Denable_docs=false --default-library=static --buildtype=release .. --prefix "$HOME/ffmpeg_build" --libdir="$HOME/ffmpeg_build/lib" --bindir="$HOME/ffmpeg_build/bin" && \
+ninja && \
+ninja install
+
+-----
+
+
+
+echo "Compiling aribb24..."
+cd ~/ffmpeg_sources && \
+git -C aribb24 pull 2> /dev/null || git clone https://github.com/nkoriyama/aribb24.git && \
+cd aribb24 && \
+PATH="$HOME/bin:$PATH" autoreconf -fiv && \
+PATH="$HOME/bin:$PATH" ./configure --prefix="$HOME/ffmpeg_build" --enable-static --disable-shared && \
+PATH="$HOME/bin:$PATH" make -j$PROC && \
+make install
+
+echo "Compiling alsa..."
+cd ~/ffmpeg_sources && \
+git -C alsa-lib pull 2> /dev/null || git clone https://github.com/alsa-project/alsa-lib.git && \
+cd alsa-lib && \
+PATH="$HOME/bin:$PATH" autoreconf -fiv && \
+PATH="$HOME/bin:$PATH" ./configure --prefix="$HOME/ffmpeg_build" --enable-static --disable-shared && \
+PATH="$HOME/bin:$PATH" make -j$PROC && \
+make install
+
+echo "Compiling PulseAudio..."
+cd ~/ffmpeg_sources && \
+git -C pulseaudio pull 2> /dev/null || git clone https://gitlab.freedesktop.org/pulseaudio/pulseaudio.git && \
+mkdir -p pulseaudio/build && cd pulseaudio/build && \
+meson setup -Ddoxygen=false --default-library=static --buildtype=release .. --prefix "$HOME/ffmpeg_build" --libdir="$HOME/ffmpeg_build/lib" --bindir="$HOME/ffmpeg_build/bin" && \
+ninja && \
+ninja install
+
+echo "Compiling Chromaprint..."
+cd ~/ffmpeg_sources && \
+mkdir -p chromaprint && cd chromaprint && \
+git -C chromaprint pull 2> /dev/null || git clone https://github.com/acoustid/chromaprint.git && \
+PATH="$HOME/bin:$PATH" cmake chromaprint/ -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DCMAKE_BUILD_TYPE=Release -DENABLE_SHARED=OFF -DBUILD_SHARED_LIBS=OFF -DENABLE_STATIC=ON -DENABLE_EXAMPLES=OFF -DENABLE_DOCS=OFF -DENABLE_TESTS=OFF -DBUILD_TOOLS=OFF && \
+PATH="$HOME/bin:$PATH" make -j$PROC && \
+make install
+
+echo "Compiling sphinxbase..."
+cd ~/ffmpeg_sources && \
+git -C sphinxbase pull 2> /dev/null || git clone https://github.com/cmusphinx/sphinxbase.git && \
+cd sphinxbase && \
+PATH="$HOME/bin:$PATH" ./autogen.sh --prefix="$HOME/ffmpeg_build" --enable-static --disable-shared && \
+PATH="$HOME/bin:$PATH" ./configure --prefix="$HOME/ffmpeg_build" --enable-static --disable-shared && \
+PATH="$HOME/bin:$PATH" make -j$PROC && \
+make install
+
+echo "Compiling pocketsphinx..."
+cd ~/ffmpeg_sources && \
+git -C pocketsphinx pull 2> /dev/null || git clone https://github.com/cmusphinx/pocketsphinx.git && \
+cd pocketsphinx && \
+PATH="$HOME/bin:$PATH" ./autogen.sh --prefix="$HOME/ffmpeg_build" --enable-static --disable-shared && \
+PATH="$HOME/bin:$PATH" ./configure --prefix="$HOME/ffmpeg_build" --enable-static --disable-shared && \
+PATH="$HOME/bin:$PATH" make -j$PROC && \
+make install
+
+echo "Compiling openvino..."
+cd ~/ffmpeg_sources && \
+mkdir -p openvino && cd openvino && \
+git -C openvino pull 2> /dev/null || git clone https://github.com/openvinotoolkit/openvino.git && \
+cd openvino && git submodule update --init --recursive && \
+chmod +x install_build_dependencies.sh && ./install_build_dependencies.sh && cd .. && \
+PATH="$HOME/bin:$PATH" cmake openvino/ -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DCMAKE_BUILD_TYPE=Release -DENABLE_SHARED=OFF -DBUILD_SHARED_LIBS=OFF -DENABLE_STATIC=ON -DENABLE_EXAMPLES=OFF -DENABLE_DOCS=OFF -DENABLE_TESTS=OFF -DBUILD_TOOLS=OFF && \
+PATH="$HOME/bin:$PATH" make -j$PROC && \
+make install
+
+echo "Compiling libva..."
+cd ~/ffmpeg_sources && \
+git -C libva pull 2> /dev/null || git clone https://github.com/intel/libva.git && \
+mkdir -p libva/build && cd libva/build && \
+PKG_CONFIG_PATH="$HOME/ffmpeg_build/lib/pkgconfig:/usr/local/lib/pkgconfig:/usr/local/share/pkgconfig" meson setup -Denable_docs=false --default-library=static --buildtype=release .. --prefix "$HOME/ffmpeg_build" --libdir="$HOME/ffmpeg_build/lib" --bindir="$HOME/ffmpeg_build/bin" && \
+ninja && \
+ninja install
+
+echo "Compiling MediaSDK..."
+cd ~/ffmpeg_sources && \
+git -C MediaSDK pull 2> /dev/null || git clone https://github.com/Intel-Media-SDK/MediaSDK && \
+PATH="$HOME/bin:$PATH" PKG_CONFIG_PATH="$HOME/ffmpeg_build/lib/pkgconfig:/usr/local/lib/pkgconfig:/usr/local/share/pkgconfig" cmake MediaSDK/ -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DCMAKE_BUILD_TYPE=Release -DENABLE_SHARED=OFF -DBUILD_SHARED_LIBS=OFF -DENABLE_STATIC=ON -DENABLE_EXAMPLES=OFF -DENABLE_DOCS=OFF -DENABLE_TESTS=OFF -DBUILD_TOOLS=OFF -DBUILD_TESTS=OFF -DBUILD_TUTORIALS=OFF -DBUILD_SAMPLES=OFF && \
+PATH="$HOME/bin:$PATH" make -j$PROC && \
+make install
+
+echo "Compiling fdk-aac..."
+cd ~/ffmpeg_sources && \
+git -C fdk-aac pull 2> /dev/null || git clone https://github.com/mstorsjo/fdk-aac.git && \
+cd fdk-aac && \
+PATH="$HOME/bin:$PATH" autoreconf -fiv && \
+PATH="$HOME/bin:$PATH" ./configure --prefix="$HOME/ffmpeg_build" --enable-static --disable-shared && \
+PATH="$HOME/bin:$PATH" make -j$PROC && \
+make install
+
+echo "Compiling libgme..."
+cd ~/ffmpeg_sources && \
+mkdir -p libgme && cd libgme && \
+git -C libgme pull 2> /dev/null || git clone https://github.com/mcfiredrill/libgme.git && \
+sed -i 's/add_library(gme SHARED/add_library(gme STATIC/g' libgme/gme/CMakeLists.txt && \
+PATH="$HOME/bin:$PATH" cmake libgme/ -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DCMAKE_BUILD_TYPE=Release -DENABLE_SHARED=OFF -DBUILD_SHARED_LIBS=OFF -DENABLE_STATIC=ON -DENABLE_EXAMPLES=OFF -DENABLE_DOCS=OFF -DENABLE_TESTS=OFF -DBUILD_TOOLS=OFF && \
+PATH="$HOME/bin:$PATH" make -j$PROC && \
+make install
+
+echo "Compiling celt..."
+cd ~/ffmpeg_sources && \
+git -C celt pull 2> /dev/null || git clone https://gitlab.xiph.org/xiph/celt.git && \
+cd celt && \
+PATH="$HOME/bin:$PATH" ./autogen.sh && \
+PATH="$HOME/bin:$PATH" ./configure --prefix="$HOME/ffmpeg_build" --enable-static --disable-shared && \
+PATH="$HOME/bin:$PATH" make -j$PROC && \
+make install
+
+echo "Compiling srt..."
+cd ~/ffmpeg_sources && \
+mkdir -p srt && cd srt && \
+git -C srt pull 2> /dev/null || git clone https://github.com/Haivision/srt.git && \
+PATH="$HOME/bin:$PATH" cmake srt/ -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DCMAKE_BUILD_TYPE=Release -DENABLE_SHARED=OFF -DBUILD_SHARED_LIBS=OFF -DENABLE_STATIC=ON -DENABLE_EXAMPLES=OFF -DENABLE_DOCS=OFF -DENABLE_TESTS=OFF -DBUILD_TOOLS=OFF && \
+PATH="$HOME/bin:$PATH" make -j$PROC && \
+make install
+
+echo "Compiling davs2..."
+cd ~/ffmpeg_sources && \
+git -C davs2 pull 2> /dev/null || git clone https://github.com/pkuvcl/davs2.git && \
+cd davs2/build/linux && \
+PATH="$HOME/bin:$PATH" ./configure --prefix="$HOME/ffmpeg_build" --enable-static --disable-shared --extra-cflags="-no-pie" --extra-ldflags="-no-pie" && \
+PATH="$HOME/bin:$PATH" make -j$PROC && \
+make install
+
+echo "Compiling xavs2..."
+cd ~/ffmpeg_sources && \
+git -C xavs2 pull 2> /dev/null || git clone https://github.com/pkuvcl/xavs2.git && \
+cd xavs2/build/linux && \
+PATH="$HOME/bin:$PATH" ./configure --prefix="$HOME/ffmpeg_build" --enable-static --disable-shared --extra-cflags="-no-pie" --extra-ldflags="-no-pie" && \
+PATH="$HOME/bin:$PATH" make -j$PROC && \
+make install
+
+echo "Compiling xavs..."
+cd ~/ffmpeg_sources && \
+svn co https://svn.code.sf.net/p/xavs/code/trunk xavs && \
+cd xavs && \
+PATH="$HOME/bin:$PATH" ./configure --prefix="$HOME/ffmpeg_build" --enable-static --disable-shared && \
+PATH="$HOME/bin:$PATH" make -j$PROC && \
+make install
+
+echo "Compiling lensfun..."
+cd ~/ffmpeg_sources && \
+mkdir -p lensfun && cd lensfun && \
+git -C lensfun pull 2> /dev/null || git clone https://github.com/lensfun/lensfun.git && \
+PATH="$HOME/bin:$PATH" cmake lensfun/ -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DBUILD_TESTS=OFF -DBUILD_DOC=OFF && \
+PATH="$HOME/bin:$PATH" make -j$PROC && \
+make install
+
+echo "Compiling libdrm..."
+cd ~/ffmpeg_sources && \
+git -C drm pull 2> /dev/null || git clone https://gitlab.freedesktop.org/mesa/drm.git && \
+mkdir -p drm/build && cd drm/build && \
+meson setup --default-library=static --buildtype=release .. --prefix "$HOME/ffmpeg_build" --libdir="$HOME/ffmpeg_build/lib" --bindir="$HOME/ffmpeg_build/bin" && \
+ninja && \
+ninja install
+
+echo "Compiling libilbc..."
+cd ~/ffmpeg_sources && \
+mkdir -p libilbc && cd libilbc && \
+git -C libilbc pull 2> /dev/null || git clone --depth=1 https://github.com/TimothyGu/libilbc.git && \
+cd libilbc && git submodule update --init && cd .. && \
+PATH="$HOME/bin:$PATH" cmake libilbc/ -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DCMAKE_BUILD_TYPE=Release -DENABLE_SHARED=OFF -DBUILD_SHARED_LIBS=OFF -DENABLE_STATIC=ON -DENABLE_EXAMPLES=OFF -DENABLE_DOCS=OFF -DENABLE_TESTS=OFF -DBUILD_TOOLS=OFF -DCMAKE_CXX_FLAGS="-I $HOME/ffmpeg_sources/abseil-cpp/build/include" && \
+PATH="$HOME/bin:$PATH" make -j$PROC && \
+make install
+
+echo "Compiling libmodplug..."
+cd ~/ffmpeg_sources && \
+mkdir -p libmodplug && cd libmodplug && \
+git -C libmodplug pull 2> /dev/null || git clone https://github.com/Konstanty/libmodplug.git && \
+PATH="$HOME/bin:$PATH" cmake libmodplug/ -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DCMAKE_BUILD_TYPE=Release -DENABLE_SHARED=OFF -DBUILD_SHARED_LIBS=OFF -DENABLE_STATIC=ON -DENABLE_EXAMPLES=OFF -DENABLE_DOCS=OFF -DENABLE_TESTS=OFF -DBUILD_TOOLS=OFF && \
+PATH="$HOME/bin:$PATH" make -j$PROC && \
+make install
+
+echo "Compiling OpenJPEG..."
+cd ~/ffmpeg_sources && \
+mkdir -p openjpeg && cd openjpeg && \
+git -C openjpeg pull 2> /dev/null || git clone https://github.com/uclouvain/openjpeg.git && \
+PATH="$HOME/bin:$PATH" cmake openjpeg/ -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DCMAKE_BUILD_TYPE=Release -DENABLE_SHARED=OFF -DBUILD_SHARED_LIBS=OFF -DENABLE_STATIC=ON -DENABLE_EXAMPLES=OFF -DENABLE_DOCS=OFF -DENABLE_TESTS=OFF -DBUILD_TOOLS=OFF && \
+PATH="$HOME/bin:$PATH" make -j$PROC && \
+make install
+
+echo "Compiling libklvanc..."
+cd ~/ffmpeg_sources && \
+git -C libklvanc pull 2> /dev/null || git clone https://github.com/stoth68000/libklvanc.git && \
+cd libklvanc && \
+PATH="$HOME/bin:$PATH" ./autogen.sh --build --prefix="$HOME/ffmpeg_build" --enable-static --disable-shared && \
+PATH="$HOME/bin:$PATH" ./configure --prefix="$HOME/ffmpeg_build" --enable-static --disable-shared && \
+PATH="$HOME/bin:$PATH" make -j$PROC && \
+make install
+
+echo "Compiling kvazaar..."
+cd ~/ffmpeg_sources && \
+git -C kvazaar pull 2> /dev/null || git clone https://github.com/ultravideo/kvazaar.git && \
+cd kvazaar && \
+PATH="$HOME/bin:$PATH" ./autogen.sh --prefix="$HOME/ffmpeg_build" --enable-static --disable-shared && \
+PATH="$HOME/bin:$PATH" ./configure --prefix="$HOME/ffmpeg_build" --enable-static --disable-shared && \
+PATH="$HOME/bin:$PATH" make -j$PROC && \
+make install
+
+echo "Compiling openh264..."
+cd ~/ffmpeg_sources && \
+mkdir -p openh264 && cd openh264 && \
+git -C openh264 pull 2> /dev/null || git clone https://github.com/cisco/openh264.git && \
+mkdir -p openh264/build && cd openh264/build && \
+meson setup -Dtests=disabled --default-library=static --buildtype=release .. --prefix "$HOME/ffmpeg_build" --libdir="$HOME/ffmpeg_build/lib" --bindir="$HOME/ffmpeg_build/bin" && \
+ninja && \
+ninja install && \
+rm -v $HOME/ffmpeg_build/lib/libopenh264.so*
+
+echo "Compiling uavs3d ..."
+cd ~/ffmpeg_sources && \
+mkdir -p uavs3d  && cd uavs3d && \
+git -C uavs3d  pull 2> /dev/null || git clone https://github.com/uavs3/uavs3d.git && \
+mkdir -p uavs3d/build/linux && cd uavs3d/build/linux  && \
+PATH="$HOME/bin:$PATH" cmake ../.. -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DCMAKE_BUILD_TYPE=Release -DENABLE_SHARED=OFF -DBUILD_SHARED_LIBS=OFF -DENABLE_STATIC=ON -DENABLE_EXAMPLES=OFF -DENABLE_DOCS=OFF -DENABLE_TESTS=OFF -DBUILD_TOOLS=OFF && \
+PATH="$HOME/bin:$PATH" make -j$PROC && \
+make install
+
+echo "Compiling librist..."
+cd ~/ffmpeg_sources && \
+git -C librist pull 2> /dev/null || git clone https://code.videolan.org/rist/librist && \
+mkdir -p librist/build && cd librist/build && \
+meson setup --default-library=static --buildtype=release .. --prefix "$HOME/ffmpeg_build" --libdir="$HOME/ffmpeg_build/lib" --bindir="$HOME/ffmpeg_build/bin" && \
+ninja && \
+ninja install
+
+echo "Compiling vapoursynth..."
+cd ~/ffmpeg_sources && \
+git -C vapoursynth pull 2> /dev/null || git clone https://github.com/vapoursynth/vapoursynth.git && \
+cd vapoursynth && \
+PATH="$HOME/bin:$PATH" ./autogen.sh --build --prefix="$HOME/ffmpeg_build" --enable-static --disable-shared && \
+PATH="$HOME/bin:$PATH" ./configure --prefix="$HOME/ffmpeg_build" --enable-static --disable-shared && \
+PATH="$HOME/bin:$PATH" make -j$PROC && \
+make install
+
+echo "Downloading libtensorflow..."
+cd ~/ffmpeg_sources && \
+mkdir -p libtensorflow && \
+wget -O libtensorflow-gpu-linux-x86_64-2.6.0.tar.gz https://storage.googleapis.com/tensorflow/libtensorflow/libtensorflow-gpu-linux-x86_64-2.6.0.tar.gz && \
+tar -xvf libtensorflow-gpu-linux-x86_64-2.6.0.tar.gz -C libtensorflow && \
+cp -r libtensorflow/lib/* $HOME/ffmpeg_build/lib && cp -r libtensorflow/include/* $HOME/ffmpeg_build/include/ && \
+echo "System Wide: sudo tar -C /usr/local -xzf libtensorflow-gpu-linux-x86_64-2.6.0.tar.gz"
+
+echo "Compiling rav1e..."
+cd ~/ffmpeg_sources && \
+mkdir -p rav1e && cd rav1e && \
+git -C rav1e pull 2> /dev/null || git clone https://github.com/xiph/rav1e.git && \
+cd rav1e && \
+cargo build --release && \
+cargo install cargo-c && \
+cargo cinstall --release --prefix=$HOME/ffmpeg_build --libdir=$HOME/ffmpeg_build/lib --includedir=$HOME/ffmpeg_build/include
