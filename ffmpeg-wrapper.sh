@@ -1,14 +1,14 @@
 #!/bin/bash
 
-CMD="/usr/local/bin/ffmpeg-custom"
-SNAPSHOT="FALSE"
+CMD="ffmpeg"
+TYPE="STREAM"
 
 while [[ $# > 1 ]]
 do
 key="$1"
 
 if [[ "${key}" == "-frames:v" ]]; then
-    SNAPSHOT="sTRUE"
+    TYPE="SNAPSHOT"
 fi
 
 case ${key} in
@@ -17,7 +17,7 @@ case ${key} in
         shift
     ;;
     -filter:v)
-        if [[ "${SNAPSHOT}" == "FALSE" ]]; then
+        if [[ "${TYPE}" == "STREAM" ]]; then
             CMD+=" $1"
         else
             shift
