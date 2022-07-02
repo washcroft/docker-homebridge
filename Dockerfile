@@ -9,7 +9,7 @@ RUN apt-get update \
   && setcap cap_net_admin,cap_net_raw,cap_net_bind_service=+eip $(eval readlink -f `which hcitool`) \
   && setcap cap_net_admin,cap_net_raw,cap_net_bind_service=+eip $(eval readlink -f `which hciconfig`)
 
-COPY root /
+COPY rootfs /
 
 # FFmpeg w/VAAPI Support
 ENV LD_LIBRARY_PATH=/usr/local/lib
