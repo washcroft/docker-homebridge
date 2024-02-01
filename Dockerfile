@@ -1,6 +1,7 @@
-FROM jrottenberg/ffmpeg:4.1-vaapi as ffmpeg
+# Broken since jrottenberg/ffmpeg uses Ubuntu 20.04 and homebridge/homebridge uses Ubuntu 22.04
+#FROM jrottenberg/ffmpeg:4.1-vaapi as ffmpeg
 
-FROM oznu/homebridge:ubuntu
+FROM homebridge/homebridge:ubuntu
 
 # Bluetooth Support
 RUN apt-get update \
@@ -12,9 +13,9 @@ RUN apt-get update \
 COPY rootfs /
 
 # FFmpeg w/VAAPI Support
-ENV LD_LIBRARY_PATH=/usr/local/lib
-COPY --from=ffmpeg /usr/local /usr/local
-COPY --from=ffmpeg /usr/lib/x86_64-linux-gnu /usr/lib/x86_64-linux-gnu
+#ENV LD_LIBRARY_PATH=/usr/local/lib
+#COPY --from=ffmpeg /usr/local /usr/local
+#COPY --from=ffmpeg /usr/lib/x86_64-linux-gnu /usr/lib/x86_64-linux-gnu
 
 COPY ffmpeg-wrapper.sh /usr/local/bin/ffmpeg-wrapper.sh
 RUN chmod +x /usr/local/bin/ffmpeg-wrapper.sh
